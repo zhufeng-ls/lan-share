@@ -697,3 +697,39 @@ def test_limit_reduction_revalidates_inflight_copy(client, monkeypatch):
     assert not entries(client, copier['default_id'])
     assert not main.storage_reservations
     assert not list((main.DATA / 'temporary').iterdir())
+
+
+def test_hidden_files_and_directories_are_uploaded_listed_and_downloaded(client):
+    did = join(client)['default_id']
+    for name in ('.env', '.config/settings.json', 'project/.git/config'):
+        r = client.put(path(did, 'upload'), params={'path':name,'create_directories':True}, content=b'demo only')
+        assert r.status_code == 200
+        assert client.get(path(did,'download'),params={'path':name}).content == b'demo only'
+    assert {i['name'] for i in entries(client,did)} == {'.env','.config','project'}
+    assert entries(client,did,'project')[0]['name'] == '.git'
+
+
+def test_dragged_empty_directories_merge_without_replacing_files(client):
+    did = join(client)['default_id']
+    body = {'path':'root/.hidden/empty','parents':True,'exist_ok':True}
+    r=client.post(path(did,'folders'),json=body)
+    assert r.status_code == 200 and r.json()['created'] is True
+    assert client.post(path(did,'folders'),json=body).json()['created'] is False
+    assert entries(client,did,'root/.hidden')[0]['name'] == 'empty'
+    assert upload(client,did,'block',b'keep').status_code == 200
+    assert client.post(path(did,'folders'),json={'path':'block/new','parents':True,'exist_ok':True}).status_code == 409
+    assert client.post(path(did,'folders'),json={'path':'block','parents':True,'exist_ok':True}).status_code == 409
+    assert client.get(path(did,'download'),params={'path':'block'}).content==b'keep'
+
+
+def test_recursive_folder_creation_rejects_traversal_and_rolls_back(client,monkeypatch):
+    did=join(client)['default_id']
+    assert client.post(path(did,'folders'),json={'path':'../escape','parents':True,'exist_ok':True}).status_code==400
+    root=main.DATA/'files'/did
+    (root/'link').symlink_to(main.DATA,target_is_directory=True)
+    assert client.post(path(did,'folders'),json={'path':'link/sub','parents':True,'exist_ok':True}).status_code==400
+    def fail(*args):raise RuntimeError('failure')
+    monkeypatch.setattr(main,'log',fail)
+    with pytest.raises(RuntimeError,match='failure'):
+        client.post(path(did,'folders'),json={'path':'new/sub/empty','parents':True,'exist_ok':True})
+    assert not (root/'new').exists()

@@ -315,6 +315,11 @@ class PathBody(BaseModel):
     path: str = Field(max_length=2000)
 
 
+class FolderBody(PathBody):
+    parents: bool = False
+    exist_ok: bool = False
+
+
 class ChangeBody(PathBody):
     version: str = Field(max_length=200)
     destination: str | None = Field(default=None, max_length=2000)
@@ -465,21 +470,25 @@ async def files(did: str, request: Request, path: str = ""):
 
 
 @app.post("/api/directories/{did}/folders")
-async def folder(did: str, body: PathBody, request: Request):
+async def folder(did: str, body: FolderBody, request: Request):
     user = current_user(request)
     value = relative(body.path, False)
     async with mutation_lock:
         user = current_user(request)
         target = locate(did, value, False)
-        if not target.parent.is_dir():
+        if not body.parents and not target.parent.is_dir():
             raise HTTPException(404, "上级目录不存在")
         if target.exists():
+            if body.exist_ok and target.is_dir():
+                return {"ok": True, "created": False}
             raise HTTPException(409, "已有同名文件或文件夹")
         with file_transaction() as (db, undo):
+            if body.parents:
+                create_parents(target, DATA / "files" / did, undo)
             target.mkdir()
             undo.append(target.rmdir)
             log(db, user, did, "mkdir", value)
-    return {"ok": True}
+    return {"ok": True, "created": True}
 
 
 @app.get("/api/directories/{did}/download")

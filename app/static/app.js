@@ -1,4 +1,5 @@
 'use strict';
+import {captureDroppedItems, collectDroppedItems} from './upload-tree.mjs';
 const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -317,50 +318,72 @@ async function renderActivity(requestId) {
   $('#footer-meta').textContent=`最近 ${items.length} 条操作`;
 }
 function sendUpload(file,did,path,expected,onProgress,createDirectories=false) {return new Promise((resolve,reject)=>{const xhr=new XMLHttpRequest();currentUpload=xhr;xhr.open('PUT',`${endpoint('upload',did)}?${new URLSearchParams({path,expected_version:expected||'',create_directories:String(createDirectories)})}`);xhr.setRequestHeader('X-Lan-Share','1');xhr.setRequestHeader('Content-Type','application/octet-stream');xhr.upload.onprogress=e=>onProgress(e.lengthComputable?Math.round(e.loaded/e.total*100):0);xhr.onload=()=>{if(xhr.status>=200&&xhr.status<300)resolve();else{let message='上传失败';try{message=JSON.parse(xhr.responseText).detail||message;}catch{}reject(Error(message));}};xhr.onerror=()=>reject(Error('网络中断，文件未完成上传，请重试'));xhr.onabort=()=>reject(Error('已取消上传'));xhr.send(file);});}
-async function uploadFiles(fileList,folderUpload=false) {
-  if(state.uploading){toast('已有文件正在上传，请稍候');return;}
+function uploadFiles(fileList,folderUpload=false,entries=[]) {
   const files=[...fileList];
+  const roots=[...entries].map(entry=>({entry}));
+  return uploadSelection(roots.length?(check,onDirectory)=>collectDroppedItems(roots,check,onDirectory):async()=>({files:files.map(file=>({file,relativePath:folderUpload?file.webkitRelativePath:file.name})),directories:[]}),folderUpload);
+}
+async function uploadSelection(loadSelection,createDirectories=false) {
+  if(state.uploading){toast('已有文件正在上传，请稍候');return;}
   if(state.view!=='files')return;
-  if(!files.length){if(folderUpload)toast('所选目录没有可上传的文件，空文件夹不会上传');return;}
   const did=state.did,basePath=state.path;
-  state.uploading=true;uploadCancelled=false;let completed=0,skipped=0,failed=false;
+  state.uploading=true;uploadCancelled=false;let completed=0,created=0,skipped=0;
   const checkCancelled=()=>{if(uploadCancelled)throw Error('已取消上传');};
+  const targetPath=path=>basePath?`${basePath}/${path}`:path;
   try{
-    const plan=files.map(file=>{
-      const relativePath=folderUpload?file.webkitRelativePath:file.name;
+    $('#upload-progress').hidden=false;$('#upload-label').textContent='正在读取文件和目录…';$('#upload-progress progress').removeAttribute('value');
+    const selection=await loadSelection(checkCancelled,path=>$('#upload-label').textContent=`正在读取目录 · ${path}`);
+    checkCancelled();
+    const plan=selection.files.map(({file,relativePath})=>{
       if(!relativePath||!relativePath.split('/').every(leafName))throw Error('文件路径无效');
       if(file.size>state.me.max_upload_bytes)throw Error(`${relativePath} 超过单文件上限 ${size(state.me.max_upload_bytes)}`);
-      return {file,relativePath,target:basePath?`${basePath}/${relativePath}`:relativePath};
+      return {file,relativePath,target:targetPath(relativePath)};
     });
+    if(!plan.length&&!selection.directories.length){toast('没有读取到可上传的项目；选择空文件夹时可尝试直接拖入');return;}
     const initial=await api(`${endpoint('files',did)}?${new URLSearchParams({path:basePath})}`);
     const total=plan.reduce((sum,item)=>sum+item.file.size,0);
     if(total>initial.storage.available_bytes)throw Error('空间已满，请联系管理员调整空间。');
+    for(const directory of selection.directories){
+      checkCancelled();$('#upload-label').textContent=`正在建立目录 · ${directory}`;
+      const result=await api(endpoint('folders',did),{method:'POST',json:{path:targetPath(directory),parents:true,exist_ok:true}});
+      if(result.created)created++;
+    }
     for(const [index,item]of plan.entries()){
       checkCancelled();
       const {file,relativePath,target}=item;
       const slash=target.lastIndexOf('/'),parent=slash<0?'':target.slice(0,slash);
       let listing;
       try{listing=await api(`${endpoint('files',did)}?${new URLSearchParams({path:parent})}`);}
-      catch(error){if(folderUpload&&error.status===404)listing={items:[]};else throw error;}
+      catch(error){if(createDirectories&&error.status===404)listing={items:[]};else throw error;}
       checkCancelled();
       const existing=listing.items.find(i=>i.name===file.name);
       if(existing?.is_dir)throw Error(`${relativePath} 与已有文件夹同名`);
       if(existing&&!await confirmAction('覆盖同名文件？',`「${relativePath}」已存在。覆盖后保留旧版本，可以从回收与历史中恢复。`,'覆盖并保留旧版')){skipped++;continue;}
       checkCancelled();
-      $('#upload-progress').hidden=false;$('#upload-label').textContent=`正在上传 ${index+1}/${plan.length} · ${relativePath}`;$('#upload-progress progress').value=0;
-      await sendUpload(file,did,target,existing?.version,percent=>$('#upload-progress progress').value=percent,folderUpload);completed++;
+      $('#upload-label').textContent=`正在上传 ${index+1}/${plan.length} · ${relativePath}`;$('#upload-progress progress').value=0;
+      await sendUpload(file,did,target,existing?.version,percent=>$('#upload-progress progress').value=percent,createDirectories);completed++;
     }
-  }catch(error){failed=true;toast(`${error.message}；已完成 ${completed} 个文件${completed?'，已完成的文件保留':''}`);}
+    toast(`已上传 ${completed} 个文件${created?`，建立 ${created} 个文件夹`:''}${skipped?`，跳过 ${skipped} 个文件`:''}`);
+  }catch(error){toast(`${error.message}；已完成 ${completed} 个文件、${created} 个文件夹，已完成项目保留`);}
   finally{
     state.uploading=false;currentUpload=null;$('#upload-progress').hidden=true;$('#file-input').value='';$('#folder-input').value='';
-    if(!failed)toast(`已上传 ${completed} 个文件${skipped?`，跳过 ${skipped} 个`:''}`);
     if(state.view==='files')await render();
   }
 }
 $('#file-input').onchange=safe(e=>uploadFiles(e.target.files));
-$('#folder-input').onchange=safe(e=>uploadFiles(e.target.files,true));
+$('#folder-input').onchange=safe(e=>uploadFiles(e.target.files,true,e.target.webkitEntries||[]));
 $('#cancel-upload').onclick=()=>{uploadCancelled=true;currentUpload?.abort();};
 
-let dragDepth=0;const dropZone=$('main');dropZone.addEventListener('dragenter',e=>{if(state.view!=='files'||!e.dataTransfer.types.includes('Files'))return;e.preventDefault();dragDepth++;dropZone.classList.add('drop-active');});dropZone.addEventListener('dragover',e=>{if(state.view==='files'&&e.dataTransfer.types.includes('Files'))e.preventDefault();});dropZone.addEventListener('dragleave',()=>{dragDepth--;if(dragDepth<=0)dropZone.classList.remove('drop-active');});dropZone.addEventListener('drop',safe(async e=>{e.preventDefault();dragDepth=0;dropZone.classList.remove('drop-active');if([...e.dataTransfer.items].some(i=>i.webkitGetAsEntry?.()?.isDirectory)){toast('请点击“上传文件夹”选择整个目录，拖放目前仅支持文件');return;}await uploadFiles(e.dataTransfer.files);}));
+let dragDepth=0;const dropZone=$('main');
+const hasFiles=e=>Array.from(e.dataTransfer.types).includes('Files');
+dropZone.addEventListener('dragenter',e=>{if(state.view!=='files'||!hasFiles(e))return;e.preventDefault();dragDepth++;dropZone.classList.add('drop-active');});
+dropZone.addEventListener('dragover',e=>{if(state.view==='files'&&hasFiles(e))e.preventDefault();});
+dropZone.addEventListener('dragleave',()=>{dragDepth--;if(dragDepth<=0)dropZone.classList.remove('drop-active');});
+dropZone.addEventListener('drop',safe(async e=>{
+  e.preventDefault();dragDepth=0;dropZone.classList.remove('drop-active');
+  if(state.view!=='files')return;
+  const roots=captureDroppedItems(e.dataTransfer);
+  await uploadSelection((check,onDirectory)=>collectDroppedItems(roots,check,onDirectory),true);
+}));
 window.addEventListener('beforeunload',e=>{if(state.uploading){e.preventDefault();e.returnValue='';}});
 start().catch(error=>{if(error.status===401){$('#welcome').hidden=false;$('#join-name').focus();}else{$('#welcome').hidden=false;$('#join-error').textContent=`无法连接服务：${error.message}`;}});
