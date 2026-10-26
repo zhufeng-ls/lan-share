@@ -641,3 +641,59 @@ def test_parallel_uploads_cannot_exceed_user_quota(client, monkeypatch):
     assert sorted(r.status_code for r in results) == [200, 413]
     assert client.get('/api/me').json()['storage']['used_bytes'] == 6
     assert not main.storage_reservations
+
+
+def test_global_storage_settings_require_admin_and_persist_for_every_scope(client):
+    assert client.put('/api/admin/storage', json={'limit_gib': 30}).status_code == 401
+    user = join(client)
+    assert client.put('/api/admin/storage', json={'limit_gib': 30}).status_code == 401
+    admin_login(client)
+    assert client.get('/api/admin/state').json()['storage_limit_bytes'] == 20 * 1024**3
+    assert client.put('/api/admin/storage', json={'limit_gib': 30}).status_code == 200
+    main.initialize()
+    assert main.storage_status(user['id'])['limit_bytes'] == 30 * 1024**3
+    assert main.storage_status(None)['limit_bytes'] == 30 * 1024**3
+    client.cookies.clear()
+    new = join(client, '新用户')
+    assert main.storage_status(new['id'])['limit_bytes'] == 30 * 1024**3
+    admin_login(client)
+    assert client.get('/api/admin/state').json()['activity'][0]['action'] == 'update_storage'
+
+
+@pytest.mark.parametrize('body', [{'limit_gib': 0}, {'limit_gib': -1}, {'limit_gib': 10241}, {'limit_gib': 1.5}, {'limit_gib': True}, {'limit_gib': 20, 'user_id': 'specific-user'}])
+def test_storage_settings_reject_invalid_limits_and_individual_overrides(client, body):
+    admin_login(client)
+    assert client.put('/api/admin/storage', json=body).status_code == 422
+    assert main.storage_limit() == 20 * 1024**3
+
+
+def test_reducing_global_limit_keeps_files_and_blocks_growth_without_exposing_sizes(client):
+    user = join(client)
+    did = user['default_id']
+    target = main.DATA / 'files' / did / 'large.bin'
+    with target.open('wb') as stream:
+        stream.truncate(2 * 1024**3)
+    token = client.cookies.get('lan_session')
+    admin_login(client)
+    assert client.put('/api/admin/storage', json={'limit_gib': 1}).status_code == 200
+    assert target.stat().st_size == 2 * 1024**3
+    response = client.put(path(did, 'upload'), headers=normal_headers(token), params={'path': 'extra.txt'}, content=b'x')
+    assert response.status_code == 413
+    assert response.json()['detail'] == '空间已满，请联系管理员调整空间。'
+    assert client.put('/api/admin/storage', json={'limit_gib': 3}).status_code == 200
+    assert client.put(path(did, 'upload'), headers=normal_headers(token), params={'path': 'extra.txt'}, content=b'x').status_code == 200
+
+
+def test_limit_reduction_revalidates_inflight_copy(client, monkeypatch):
+    owner, copier, item = prepare_copy(client)
+    original = main.copy_to_temporary
+    def copying(source, temporary):
+        original(source, temporary)
+        with main.database() as db:
+            db.execute('INSERT INTO storage_settings VALUES (1,?)', (item['size']-1,))
+    monkeypatch.setattr(main, 'copy_to_temporary', copying)
+    response = client.post(path(owner['default_id'], 'copy'), json={'path': item['path'], 'version': item['version']})
+    assert response.status_code == 413
+    assert not entries(client, copier['default_id'])
+    assert not main.storage_reservations
+    assert not list((main.DATA / 'temporary').iterdir())

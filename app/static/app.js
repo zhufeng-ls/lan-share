@@ -120,7 +120,7 @@ async function showAdmin() {
   history.replaceState(null,'','/?view=admin');
   renderAdmin();
 }
-const adminActionLabels={disable_user:'停用用户',restore_user:'恢复用户',archive_directory:'目录移入管理回收站',restore_directory:'恢复目录'};
+const adminActionLabels={disable_user:'停用用户',restore_user:'恢复用户',archive_directory:'目录移入管理回收站',restore_directory:'恢复目录',update_storage:'调整统一空间'};
 function renderAdmin() {
   $$('[data-admin-view]').forEach(button=>button.className=button.dataset.adminView===adminView?'primary':'secondary');
   const users=adminData.users.filter(user=>adminView==='recycle'?user.disabled_at:!user.disabled_at);
@@ -129,10 +129,17 @@ function renderAdmin() {
   const directoryRows=directories.map(dir=>`<div class="event"><span class="event-icon">${icon('folder')}</span><div class="event-detail"><p><strong>${esc(dir.name)}</strong> <span class="mini-badge">${dir.id.slice(0,8)}</span></p><small>${esc(dir.owner||'大家共有')} · ${dir.entries??'未知'} 个直接子项目${dir.deleted_at?' · 已移入管理回收站':''}</small></div>${dir.id==='public'?'<span class="pill">系统保留</span>':`<button class="secondary admin-action" data-kind="directory" data-id="${dir.id}" data-action="${dir.deleted_at?'restore':'archive'}">${dir.deleted_at?'恢复目录':'移入回收站'}</button>`}</div>`).join('');
   let html='';
   if(adminView==='users')html=userRows;
+  else if(adminView==='storage')html=`<form id="storage-settings-form" class="storage-settings"><h2>统一空间分配</h2><p>所有用户使用相同额度，公共目录也使用这一额度。现有用户和新用户同时生效。</p><label for="storage-limit">每个用户的空间上限（GiB）</label><input id="storage-limit" type="number" min="1" max="10240" step="1" required value="${adminData.storage_limit_bytes/1024**3}"><p class="muted">回收站和历史版本计入额度。调低额度不会删除文件；已超额的空间会暂停新增写入，读取和恢复仍可使用。</p><button class="primary" type="submit">保存统一额度</button><p class="error" id="storage-settings-error" role="alert"></p></form>`;
   else if(adminView==='directories')html=directoryRows;
   else if(adminView==='recycle')html=`<h2 class="admin-section-title">已停用用户</h2>${userRows||'<p class="muted admin-empty">暂无已停用用户</p>'}<h2 class="admin-section-title">已移除目录</h2>${directoryRows||'<p class="muted admin-empty">暂无已移除目录</p>'}`;
   else html=adminData.activity.map(item=>`<div class="event"><span class="event-icon">${icon('clock')}</span><div class="event-detail"><p>${adminActionLabels[item.action]||esc(item.action)}：${esc(item.label)}</p><small>${item.target_id.slice(0,8)} · ${new Date(item.created*1000).toLocaleString('zh-CN')}</small></div></div>`).join('');
   $('#admin-content').innerHTML=`<div class="event-list">${html||'<p class="muted admin-empty">暂无记录</p>'}</div>`;
+  if($('#storage-settings-form'))$('#storage-settings-form').onsubmit=async event=>{
+    event.preventDefault();const submit=$('button',event.target);submit.disabled=true;$('#storage-settings-error').textContent='';
+    try{await api('/api/admin/storage',{method:'PUT',json:{limit_gib:Number($('#storage-limit').value)}});await showAdmin();toast('统一空间额度已更新');}
+    catch(error){$('#storage-settings-error').textContent=error.message;}
+    finally{submit.disabled=false;}
+  };
   $$('.admin-action').forEach(button=>button.onclick=safe(async()=>{
     const kind=button.dataset.kind,id=button.dataset.id,action=button.dataset.action;
     const item=(kind==='user'?adminData.users:adminData.directories).find(entry=>entry.id===id);
@@ -216,7 +223,6 @@ async function renderFiles(requestId) {
   $$('.breadcrumbs button').forEach(b=>b.onclick=safe(()=>navigate('files',state.did,b.dataset.path)));
   $('#refresh-files').onclick=safe(()=>render());$('#file-search').oninput=e=>{state.search=e.target.value;fileRows();};
   const result=await api(`${endpoint('files')}?${new URLSearchParams({path:state.path})}`);if(requestId!==state.renderId)return;
-  const storage=result.storage;$('#context-bar').insertAdjacentHTML('beforeend',`<div class="storage-note"><span>${esc(storage.owner_name)}的空间 · 已用 ${size(storage.used_bytes)} / ${size(storage.limit_bytes)}${storage.reserved_bytes?` · 正在写入 ${size(storage.reserved_bytes)}`:''}</span><small>回收站和历史版本计入额度</small><progress aria-label="空间使用量" max="${storage.limit_bytes}" value="${Math.min(storage.limit_bytes,storage.used_bytes+storage.reserved_bytes)}"></progress></div>`);
   state.items=result.items;fileRows();$('#footer-meta').textContent=`${state.items.length} 个项目 · 单文件上限 ${size(state.me.max_upload_bytes)}`;
 }
 function fileRows() {
@@ -328,7 +334,7 @@ async function uploadFiles(fileList,folderUpload=false) {
     });
     const initial=await api(`${endpoint('files',did)}?${new URLSearchParams({path:basePath})}`);
     const total=plan.reduce((sum,item)=>sum+item.file.size,0);
-    if(total>initial.storage.available_bytes)throw Error(`所选文件共 ${size(total)}，${initial.storage.owner_name}的空间仅剩 ${size(initial.storage.available_bytes)}；回收站和历史版本也占用额度`);
+    if(total>initial.storage.available_bytes)throw Error('空间已满，请联系管理员调整空间。');
     for(const [index,item]of plan.entries()){
       checkCancelled();
       const {file,relativePath,target}=item;

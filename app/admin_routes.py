@@ -29,6 +29,22 @@ class LoginBody(BaseModel):
     password: str = Field(min_length=1, max_length=256)
 
 
+class StorageBody(BaseModel):
+    model_config = {"extra": "forbid"}
+    limit_gib: int = Field(ge=1, le=10240, strict=True)
+
+
+@router.put("/storage")
+async def update_storage(body: StorageBody, request: Request):
+    async with core.mutation_lock:
+        require_admin(request)
+        limit = body.limit_gib * 1024 ** 3
+        with core.database() as db:
+            db.execute("INSERT INTO storage_settings(id,limit_bytes) VALUES (1,?) ON CONFLICT(id) DO UPDATE SET limit_bytes=excluded.limit_bytes", (limit,))
+            record(db, "update_storage", "global", f"统一空间上限设为 {body.limit_gib} GiB")
+    return {"ok": True, "limit_bytes": limit}
+
+
 @router.post("/login")
 async def login(body: LoginBody):
     if core.identity_key(body.name) != core.ADMIN_NAME:
@@ -90,7 +106,7 @@ def state(request: Request):
         directory["entries"] = sum(1 for _ in root.iterdir()) if root.is_dir() and not root.is_symlink() else None
     for user in users:
         user["storage"] = core.storage_status(user["id"])
-    return {"users": users, "directories": directories, "activity": activity}
+    return {"users": users, "directories": directories, "activity": activity, "storage_limit_bytes": core.storage_limit()}
 
 
 @router.post("/users/{uid}/disable")

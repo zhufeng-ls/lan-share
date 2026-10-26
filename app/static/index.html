@@ -5,8 +5,8 @@
   <meta name="theme-color" content="#354f3b">
   <title>邻间 · 局域网共享文件站</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-  <link rel="stylesheet" href="/static/style.css?v=folder-quota-1">
-  <script defer src="/static/app.js?v=folder-quota-1"></script>
+  <link rel="stylesheet" href="/static/style.css?v=global-storage-1">
+  <script defer src="/static/app.js?v=global-storage-1"></script>
 </head>
 <body>
   <section id="welcome" hidden>
@@ -19,7 +19,7 @@
   </div>
   <section id="admin-shell" hidden>
     <header class="admin-header"><div class="brand"><span class="brand-icon">邻</span>空间管理</div><div class="actions"><span class="pill">管理员</span><button id="admin-refresh" class="secondary">刷新</button><button id="admin-logout" class="secondary">退出管理</button></div></header>
-    <div class="admin-content"><div class="eyebrow">SPACE MANAGEMENT</div><h1>整理用户与目录</h1><p class="admin-intro">停用用户会使其登录失效，文件目录继续保留。目录单独移入管理回收站，可随时恢复。</p><nav id="admin-tabs" class="actions" aria-label="管理分类"><button data-admin-view="users" class="primary">用户</button><button data-admin-view="directories" class="secondary">目录</button><button data-admin-view="recycle" class="secondary">管理回收站</button><button data-admin-view="activity" class="secondary">操作记录</button></nav><div id="admin-content"></div></div>
+    <div class="admin-content"><div class="eyebrow">SPACE MANAGEMENT</div><h1>整理用户与目录</h1><p class="admin-intro">停用用户会使其登录失效，文件目录继续保留。目录单独移入管理回收站，可随时恢复。</p><nav id="admin-tabs" class="actions" aria-label="管理分类"><button data-admin-view="users" class="primary">用户</button><button data-admin-view="directories" class="secondary">目录</button><button data-admin-view="recycle" class="secondary">管理回收站</button><button data-admin-view="storage" class="secondary">空间分配</button><button data-admin-view="activity" class="secondary">操作记录</button></nav><div id="admin-content"></div></div>
   </section>
   <div id="toast" role="status" hidden></div>
   <dialog id="modal"><form id="modal-form"><div class="modal-heading"><h2 id="modal-title"></h2><button type="button" id="modal-close" aria-label="关闭">×</button></div><div id="modal-body"></div><p id="modal-error" class="error" role="alert"></p><div class="modal-actions"><button type="button" id="modal-cancel" class="secondary">取消</button><button type="submit" id="modal-submit" class="primary">确定</button></div></form></dialog>

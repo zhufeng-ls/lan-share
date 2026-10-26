@@ -97,6 +97,8 @@ def initialize():
         CREATE TABLE IF NOT EXISTS admin_activity (
           id INTEGER PRIMARY KEY AUTOINCREMENT, action TEXT NOT NULL,
           target_id TEXT NOT NULL, label TEXT NOT NULL, created REAL NOT NULL);
+        CREATE TABLE IF NOT EXISTS storage_settings (
+          id INTEGER PRIMARY KEY CHECK(id=1), limit_bytes INTEGER NOT NULL CHECK(limit_bytes>0));
         """)
         db.execute("INSERT OR IGNORE INTO directories(id,name,owner_id,created) VALUES (?, ?, NULL, ?)", ("public", "公共目录", time.time()))
     (DATA / "files" / "public").mkdir(exist_ok=True)
@@ -246,6 +248,12 @@ def tree_bytes(root):
     return total
 
 
+def storage_limit():
+    with database() as db:
+        row = db.execute("SELECT limit_bytes FROM storage_settings WHERE id=1").fetchone()
+    return row[0] if row else STORAGE_LIMIT
+
+
 def storage_status(owner_id):
     with database() as db:
         directories = [row[0] for row in db.execute("SELECT id FROM directories WHERE owner_id IS ?", (owner_id,))]
@@ -254,9 +262,10 @@ def storage_status(owner_id):
     used = sum(tree_bytes(DATA / "files" / did) for did in directories)
     used += sum(tree_bytes(DATA / "trash" / tid) for tid in history)
     reserved = sum(size for scope, size in list(storage_reservations.values()) if scope == owner_id)
+    limit = storage_limit()
     return {"owner_id": owner_id, "owner_name": owner[0] if owner else "公共目录", "used_bytes": used,
-            "reserved_bytes": reserved, "limit_bytes": STORAGE_LIMIT,
-            "available_bytes": max(0, STORAGE_LIMIT - used - reserved)}
+            "reserved_bytes": reserved, "limit_bytes": limit,
+            "available_bytes": max(0, limit - used - reserved)}
 
 
 def storage_owner(did):
@@ -270,8 +279,8 @@ def storage_owner(did):
 def reserve_storage(key, owner_id, size):
     current = storage_reservations.get(key, (owner_id, 0))[1]
     status = storage_status(owner_id)
-    if size - current > status["available_bytes"]:
-        raise HTTPException(413, f"{status['owner_name']}的空间不足，上限 {STORAGE_LIMIT / 1024 ** 3:g} GiB；回收站和历史版本也占用空间")
+    if size > 0 and status["used_bytes"] + status["reserved_bytes"] - current + size > status["limit_bytes"]:
+        raise HTTPException(413, "空间已满，请联系管理员调整空间。")
     storage_reservations[key] = (owner_id, size)
 
 
