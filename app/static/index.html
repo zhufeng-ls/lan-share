@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#354f3b">
+  <title>邻间 · 局域网共享文件站</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="stylesheet" href="/static/style.css?v=folder-quota-1">
+  <script defer src="/static/app.js?v=folder-quota-1"></script>
+</head>
+<body>
+  <section id="welcome" hidden>
+    <div class="welcome-art"><div class="brand light"><span class="brand-icon">邻</span>邻间<span class="brand-en">LAN SHARE</span></div><div class="welcome-copy"><span class="eyebrow">同一个网络，让文件走近一点。</span><h1>你的文件，<br>大家的空间。</h1><p>放下文件，复制链接。<br>在这里，分享就这么简单。</p></div><div class="art-folders" aria-hidden="true"><div>项目资料<span>一起完成的事</span></div><div>我的目录<span>从这里开始</span></div><div>公共目录<span>随手分享的好东西</span></div></div><small>LOCAL NETWORK · SHARED SPACE</small></div>
+    <div class="welcome-form"><div class="welcome-inner"><span class="pill">● 局域网内共享</span><h2>怎么称呼你？</h2><p>填个名字，就可以开始了。<br>下次打开，这个浏览器会记得你。</p><form id="join-form"><label for="join-name">你的名字</label><input id="join-name" name="name" maxlength="100" placeholder="例如：小王" autocomplete="nickname" required autofocus><button class="primary wide" type="submit">进入共享空间 <span>→</span></button><p id="join-error" class="error" role="alert"></p></form><div id="join-choice" hidden></div><div class="welcome-note">每个用户使用不同名字。输入用过的名字，可以继续使用已有空间。</div></div><small class="welcome-foot">文件留在这台服务器上，分享发生在你们之间。</small></div>
+  </section>
+  <div id="shell" hidden>
+    <aside class="sidebar"><a href="/" class="brand"><span class="brand-icon">邻</span>邻间<span class="brand-en">LAN SHARE</span></a><div class="network-tag"><span></span>局域网共享空间</div><nav aria-label="主要导航"><button data-view="files" id="home-nav"><span data-icon="home"></span>默认目录</button><button data-view="all"><span data-icon="grid"></span>全部目录<span id="dir-count" class="count"></span></button><div class="nav-label">我的常用目录<button id="manage-pins" aria-label="管理常用目录">＋</button></div><div id="pin-list"></div><button id="associate" class="associate"><span data-icon="plus"></span>关联目录</button><div class="nav-divider"></div><button data-view="trash"><span data-icon="trash"></span>回收与历史</button><button data-view="activity"><span data-icon="clock"></span>最近动态</button></nav><div class="sidebar-bottom"><div class="shared-note"><span data-icon="users"></span><div>按人整理，一起使用<small>所有目录均可互相读写</small></div></div><button id="profile-button" class="profile-button"><span id="avatar" class="avatar"></span><span><strong id="profile-name"></strong><small>名字与身份设置</small></span><span>⚙</span></button></div></aside>
+    <main><header class="topbar"><span id="top-label">文件空间</span><span class="top-note"><span class="status-dot"></span>文件存储在本机服务器</span></header><div class="main-content"><div class="page-heading"><div><div class="eyebrow" id="page-eyebrow">MY SPACE</div><h1 id="page-title">我的目录</h1><p id="page-description"></p></div><div id="page-actions" class="actions"></div></div><div id="context-bar"></div><div id="upload-progress" hidden><div><span id="upload-label"></span><button id="cancel-upload" class="text-button">取消</button></div><progress max="100" value="0"></progress></div><div id="content" aria-live="polite"></div><footer class="content-footer"><span>邻间 · 让分享留在身边</span><span id="footer-meta"></span></footer></div></main>
+  </div>
+  <section id="admin-shell" hidden>
+    <header class="admin-header"><div class="brand"><span class="brand-icon">邻</span>空间管理</div><div class="actions"><span class="pill">管理员</span><button id="admin-refresh" class="secondary">刷新</button><button id="admin-logout" class="secondary">退出管理</button></div></header>
+    <div class="admin-content"><div class="eyebrow">SPACE MANAGEMENT</div><h1>整理用户与目录</h1><p class="admin-intro">停用用户会使其登录失效，文件目录继续保留。目录单独移入管理回收站，可随时恢复。</p><nav id="admin-tabs" class="actions" aria-label="管理分类"><button data-admin-view="users" class="primary">用户</button><button data-admin-view="directories" class="secondary">目录</button><button data-admin-view="recycle" class="secondary">管理回收站</button><button data-admin-view="activity" class="secondary">操作记录</button></nav><div id="admin-content"></div></div>
+  </section>
+  <div id="toast" role="status" hidden></div>
+  <dialog id="modal"><form id="modal-form"><div class="modal-heading"><h2 id="modal-title"></h2><button type="button" id="modal-close" aria-label="关闭">×</button></div><div id="modal-body"></div><p id="modal-error" class="error" role="alert"></p><div class="modal-actions"><button type="button" id="modal-cancel" class="secondary">取消</button><button type="submit" id="modal-submit" class="primary">确定</button></div></form></dialog>
+  <input id="file-input" type="file" multiple hidden>
+  <input id="folder-input" type="file" webkitdirectory multiple hidden>
+</body></html>

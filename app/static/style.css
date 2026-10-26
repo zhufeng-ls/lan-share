@@ -1,0 +1,6 @@
+@import url('/static/base.css');
+
+.storage-note{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;padding:12px 0 18px;color:var(--muted,#7b897a);font-size:12px}
+.storage-note small{font-size:11px}
+.storage-note progress{width:100%;height:5px;accent-color:#587149}
+.page-heading .actions{flex-wrap:wrap;justify-content:flex-end}

@@ -1,0 +1,12 @@
+.env
+.venv/
+__pycache__/
+.pytest_cache/
+data/
+*.tar.gz
+*.sqlite3
+*.sqlite3-*
+*.zip
+# 原部署主机的迁移脚本与站点配置，不属于通用部署模板。
+enable-http80.py
+deploy/nginx-share.conf
