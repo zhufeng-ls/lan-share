@@ -5,6 +5,7 @@ const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const shapes = {
   folder:'<path d="M3 7V5a2 2 0 0 1 2-2h5l3 4h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/>',
+  move:'<path d="M3 7V5a2 2 0 0 1 2-2h5l3 4h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/><path d="M7 14h10m-3-3 3 3-3 3"/>',
   copy:'<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
   file:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h5"/>',
   home:'<path d="m3 10 9-7 9 7v10H3Z"/><path d="M9 20v-7h6v7"/>',
@@ -229,9 +230,9 @@ async function renderFiles(requestId) {
 function fileRows() {
   const items=state.items.filter(i=>i.name.toLocaleLowerCase().includes(state.search.toLocaleLowerCase()));
   let banner='';if(state.file){const item=state.items.find(i=>i.path===state.file&&!i.is_dir);banner=item?`<div class="share-banner"><p>有人与你分享了 <strong>${esc(item.name)}</strong></p><a href="${endpoint('download')}?${new URLSearchParams({path:item.path})}">下载文件 ↓</a></div>`:'<div class="share-banner"><p>分享的文件已被移动或删除，下面显示当前目录。</p></div>';}
-  $('#content').innerHTML=banner+(items.length?`<div class="table-wrap"><table class="file-table"><thead><tr><th>文件名称</th><th>大小</th><th>修改时间</th><th>操作</th></tr></thead><tbody>${items.map((item,index)=>`<tr data-index="${index}"><td><button class="file-name" data-action="open" title="${esc(item.name)}">${symbol(item)}<span class="filename">${esc(item.name)}</span></button></td><td>${item.is_dir?'—':size(item.size)}</td><td>${date(item.modified)}</td><td><div class="row-actions">${!item.is_dir?`<a href="${endpoint('download')}?${new URLSearchParams({path:item.path})}" title="下载 ${esc(item.name)}" aria-label="下载 ${esc(item.name)}">${icon('download')}</a>`:''}${!item.is_dir&&isText(item.name)?`<button data-action="edit" title="编辑 ${esc(item.name)}" aria-label="编辑 ${esc(item.name)}">${icon('file')}</button>`:''}${!item.is_dir?`<button data-action="copy" title="复制到我的目录：${esc(item.name)}" aria-label="复制到我的目录 ${esc(item.name)}">${icon('copy')}</button>`:''}<button data-action="share" title="分享 ${esc(item.name)}" aria-label="分享 ${esc(item.name)}">${icon('link')}</button><button data-action="rename" title="重命名 ${esc(item.name)}" aria-label="重命名 ${esc(item.name)}">${icon('edit')}</button><button class="delete" data-action="delete" title="删除 ${esc(item.name)}" aria-label="删除 ${esc(item.name)}">${icon('trash')}</button></div></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty"><span class="empty-icon">${icon(state.search?'search':'folder')}</span><h3>${state.search?'没有找到匹配文件':'这里，等你放下第一份文件'}</h3><p>${state.search?'试试其他关键词。':'把文件拖到这里，或点击上传。放好之后，就能发给同一局域网里的伙伴。'}</p>${state.search?'':button('empty-upload','上传文件','primary','upload')}</div>`)+`<div class="hint-strip">${icon('shield')}删除的文件和覆盖前的版本，会保留在「回收与历史」中。</div>`;
+  $('#content').innerHTML=banner+(items.length?`<div class="table-wrap"><table class="file-table"><thead><tr><th>文件名称</th><th>大小</th><th>修改时间</th><th>操作</th></tr></thead><tbody>${items.map((item,index)=>`<tr data-index="${index}"><td><button class="file-name" data-action="open" title="${esc(item.name)}">${symbol(item)}<span class="filename">${esc(item.name)}</span></button></td><td>${item.is_dir?'—':size(item.size)}</td><td>${date(item.modified)}</td><td><div class="row-actions">${!item.is_dir?`<a href="${endpoint('download')}?${new URLSearchParams({path:item.path})}" title="下载 ${esc(item.name)}" aria-label="下载 ${esc(item.name)}">${icon('download')}</a>`:''}${!item.is_dir&&isText(item.name)?`<button data-action="edit" title="编辑 ${esc(item.name)}" aria-label="编辑 ${esc(item.name)}">${icon('file')}</button>`:''}${!item.is_dir?`<button data-action="copy" title="复制到我的目录：${esc(item.name)}" aria-label="复制到我的目录 ${esc(item.name)}">${icon('copy')}</button>`:''}<button data-action="move" title="移动 ${esc(item.name)}" aria-label="移动 ${esc(item.name)}">${icon('move')}</button><button data-action="share" title="分享 ${esc(item.name)}" aria-label="分享 ${esc(item.name)}">${icon('link')}</button><button data-action="rename" title="重命名 ${esc(item.name)}" aria-label="重命名 ${esc(item.name)}">${icon('edit')}</button><button class="delete" data-action="delete" title="删除 ${esc(item.name)}" aria-label="删除 ${esc(item.name)}">${icon('trash')}</button></div></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty"><span class="empty-icon">${icon(state.search?'search':'folder')}</span><h3>${state.search?'没有找到匹配文件':'这里，等你放下第一份文件'}</h3><p>${state.search?'试试其他关键词。':'把文件拖到这里，或点击上传。放好之后，就能发给同一局域网里的伙伴。'}</p>${state.search?'':button('empty-upload','上传文件','primary','upload')}</div>`)+`<div class="hint-strip">${icon('shield')}删除的文件和覆盖前的版本，会保留在「回收与历史」中。</div>`;
   if($('#empty-upload'))$('#empty-upload').onclick=()=>$('#file-input').click();
-  $$('[data-action]',$('#content')).forEach(b=>b.onclick=safe(async()=>{const item=items[Number(b.closest('tr').dataset.index)];switch(b.dataset.action){case'open':if(item.is_dir)await navigate('files',state.did,item.path);else if(isText(item.name))await editFile(item);else window.location.href=`${endpoint('download')}?${new URLSearchParams({path:item.path})}`;break;case'edit':await editFile(item);break;case'copy':b.disabled=true;try{await copyFile(item);}finally{b.disabled=false;}break;case'share':await share(item.is_dir?item.path:state.path,item.is_dir?'':item.path);break;case'rename':await renameFile(item);break;case'delete':await deleteFile(item);break;}}));
+  $$('[data-action]',$('#content')).forEach(b=>b.onclick=safe(async()=>{const item=items[Number(b.closest('tr').dataset.index)];switch(b.dataset.action){case'open':if(item.is_dir)await navigate('files',state.did,item.path);else if(isText(item.name))await editFile(item);else window.location.href=`${endpoint('download')}?${new URLSearchParams({path:item.path})}`;break;case'edit':await editFile(item);break;case'copy':b.disabled=true;try{await copyFile(item);}finally{b.disabled=false;}break;case'move':await moveFile(item);break;case'share':await share(item.is_dir?item.path:state.path,item.is_dir?'':item.path);break;case'rename':await renameFile(item);break;case'delete':await deleteFile(item);break;}}));
 }
 async function copyFile(item) {
   const sourceId=state.did;
@@ -257,6 +258,38 @@ async function createTemporaryFile() {
   if(created){state.search='';await render();toast(`已创建「${created}」`);}
 }
 async function createFolder() {const name=await ask('新建文件夹','将在当前目录中创建，所有人都能访问。','','创建',leafName);if(name){await api(endpoint('folders'),{method:'POST',json:{path:joinPath(name)}});await render();toast('文件夹已创建');}}
+async function moveFile(item) {
+  const did=state.did,sourceParent=state.path;
+  const rootName=state.dirs.find(dir=>dir.id===did)?.name||'根目录';
+  let selected='',ready=false,requestId=0,closed=false;
+  const destination=()=>selected?`${selected}/${item.name}`:item.name;
+  const pending=dialog({title:`移动 · ${item.name}`,submit:'移动到这里',html:`<p>选择「${esc(rootName)}」内的目标文件夹。移动后旧的分享链接可能失效。</p><div class="move-location"><button id="move-root" class="secondary" type="button">根目录</button><button id="move-up" class="secondary" type="button">上一级</button></div><p id="move-location" class="move-path"></p><div id="move-folders" class="move-folders" aria-live="polite"></div>`,onSubmit:async()=>{
+    if(!ready||selected===sourceParent)throw Error('请选择其他目标文件夹');
+    ready=false;$('#move-root').disabled=true;$('#move-up').disabled=true;$$('[data-move-folder]').forEach(button=>button.disabled=true);
+    try {await api(endpoint('rename',did),{method:'POST',json:{path:item.path,version:item.version,destination:destination()}});return selected?`${rootName}/${selected}`:rootName;}
+    catch(error){await load(selected);throw error;}
+  }});
+  async function load(path) {
+    const current=++requestId;ready=false;$('#modal-submit').disabled=true;
+    $('#move-folders').textContent='正在读取文件夹…';$('#modal-error').textContent='';
+    try {
+      const result=await api(`${endpoint('files',did)}?${new URLSearchParams({path})}`);
+      if(closed||current!==requestId)return;
+      selected=path;ready=true;
+      $('#move-location').textContent=`目标位置：${rootName}${path?'/'+path:'（根目录）'}`;
+      $('#move-root').disabled=!path;$('#move-up').disabled=!path;
+      const folders=result.items.filter(entry=>entry.is_dir&&(!item.is_dir||(entry.path!==item.path&&!entry.path.startsWith(item.path+'/'))));
+      $('#move-folders').innerHTML=folders.length?folders.map((entry,index)=>`<button type="button" class="move-folder" data-move-folder="${index}">${icon('folder')}<span>${esc(entry.name)}</span><span>进入 →</span></button>`).join(''):'<p class="muted">这里没有可进入的子文件夹。</p>';
+      $$('[data-move-folder]').forEach(button=>button.onclick=()=>load(folders[Number(button.dataset.moveFolder)].path));
+      $('#modal-submit').disabled=selected===sourceParent;
+    } catch(error){if(!closed&&current===requestId){$('#move-folders').textContent='无法读取目标文件夹';$('#modal-error').textContent=error.message;}}
+  }
+  $('#move-root').onclick=()=>load('');
+  $('#move-up').onclick=()=>load(selected.split('/').slice(0,-1).join('/'));
+  load(sourceParent);
+  const moved=await pending;closed=true;requestId++;
+  if(moved){await render();toast(`已移动到「${moved}」`);}
+}
 async function renameFile(item) {const name=await ask('重命名',`为「${item.name}」设置新名称。旧的分享链接可能因此失效。`,item.name,'保存',leafName);if(name&&name!==item.name){await api(endpoint('rename'),{method:'POST',json:{path:item.path,version:item.version,destination:joinPath(name)}});await render();toast('名称已更新');}}
 async function deleteFile(item) {if(await confirmAction('移入回收站',`「${item.name}」${item.is_dir?'及其中所有文件':''}将从共享目录中移除，大家都将无法在原位置访问。之后可从回收与历史中恢复。`,'移入回收站')){await api(endpoint('delete'),{method:'POST',json:{path:item.path,version:item.version}});await render();toast('已移入回收站');}}
 async function editFile(item) {
@@ -326,7 +359,7 @@ async function renderTrash(requestId) {
   $('#content').innerHTML=items.length?`<div class="event-list">${items.map((item,index)=>`<div class="event"><span class="event-icon">${icon(item.reason==='overwrite'?'clock':'trash')}</span><div class="event-detail"><p>${esc(item.path)} <span class="mini-badge">${item.reason==='overwrite'?'覆盖前版本':'已删除'}</span></p><small>${esc(item.directory)} · ${esc(item.actor)} · ${date(item.created)}</small></div><button class="secondary restore-button" data-index="${index}">恢复</button></div>`).join('')}</div>`:`<div class="empty"><span class="empty-icon">${icon('trash')}</span><h3>还没有需要恢复的文件</h3><p>文件被删除或覆盖后，旧内容会出现在这里。</p></div>`;
   $$('.restore-button').forEach(b=>b.onclick=safe(async()=>{const item=items[Number(b.dataset.index)];const restored=await dialog({title:'恢复文件',html:`<p>恢复到「${esc(item.directory)}」。可以修改路径，避免覆盖现有文件；上级文件夹需已存在。</p><label for="restore-path">恢复路径</label><input id="restore-path" required value="${esc(item.path)}">`,submit:'恢复',onSubmit:()=>api(`/api/trash/${item.id}/restore`,{method:'POST',json:{path:$('#restore-path').value}})});if(restored){await render();toast('文件已恢复');}}));$('#footer-meta').textContent=`${items.length} 条保留记录`;
 }
-const actionLabels={copy:'复制了',upload:'上传了',overwrite:'更新了',delete:'删除了',rename:'重命名了',mkdir:'新建了文件夹',create_directory:'创建了共享目录',restore:'恢复了'};
+const actionLabels={move:'移动了',copy:'复制了',upload:'上传了',overwrite:'更新了',delete:'删除了',rename:'重命名了',mkdir:'新建了文件夹',create_directory:'创建了共享目录',restore:'恢复了'};
 async function renderActivity(requestId) {
   heading('最近动态','看看共享空间里发生了什么。显示最近 200 条操作记录。','WHAT’S NEW',button('refresh-activity','刷新','secondary','refresh'));
   $('#refresh-activity').onclick=safe(()=>render());const items=await api('/api/activity');if(requestId!==state.renderId)return;

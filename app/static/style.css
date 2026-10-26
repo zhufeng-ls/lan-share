@@ -3,3 +3,5 @@
 .page-heading .actions{flex-wrap:wrap;justify-content:flex-end}
 
 .storage-settings{padding:28px;max-width:640px}.storage-settings h2{font-size:20px;margin:0 0 16px}.storage-settings p{font-size:14px;line-height:1.7;margin:14px 0}.storage-settings input{max-width:240px;display:block;margin:10px 0 18px}
+
+.move-location{display:flex;gap:10px;margin:14px 0}.move-path{overflow-wrap:anywhere}.move-folders{max-height:280px;overflow:auto;min-height:70px}.move-folder{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:13px 8px;border-bottom:1px solid var(--line)}.move-folder span:first-of-type{flex:1;overflow-wrap:anywhere}.move-folder:hover{background:#edf1e6}.move-folder svg{width:18px;flex-shrink:0}.row-actions{flex-wrap:wrap}

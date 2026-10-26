@@ -652,7 +652,8 @@ async def rename(did: str, body: ChangeBody, request: Request):
         with file_transaction() as (db, undo):
             os.replace(target, destination)
             undo.append(lambda: os.replace(destination, target))
-            log(db, user, did, "rename", f"{value} → {dest}")
+            action = "move" if target.parent != destination.parent else "rename"
+            log(db, user, did, action, f"{value} → {dest}")
     return {"ok": True}
 
 

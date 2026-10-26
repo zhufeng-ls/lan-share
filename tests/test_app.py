@@ -733,3 +733,61 @@ def test_recursive_folder_creation_rejects_traversal_and_rolls_back(client,monke
     with pytest.raises(RuntimeError,match='failure'):
         client.post(path(did,'folders'),json={'path':'new/sub/empty','parents':True,'exist_ok':True})
     assert not (root/'new').exists()
+
+
+def test_move_file_into_nested_folder_and_back_keeps_owner_quota(client):
+    user=join(client)
+    did=user['default_id']
+    upload(client,did,'notes.txt',b'content')
+    client.post(path(did,'folders'),json={'path':'a/b','parents':True})
+    original_usage=client.get('/api/me').json()['storage']['used_bytes']
+    item=next(i for i in entries(client,did) if i['name']=='notes.txt')
+    response=client.post(path(did,'rename'),json={'path':item['path'],'version':item['version'],'destination':'a/b/notes.txt'})
+    assert response.status_code==200
+    assert client.get(path(did,'download'),params={'path':'notes.txt'}).status_code==404
+    assert client.get(path(did,'download'),params={'path':'a/b/notes.txt'}).content==b'content'
+    assert client.get('/api/activity').json()[0]['action']=='move'
+    moved=entries(client,did,'a/b')[0]
+    assert client.post(path(did,'rename'),json={'path':moved['path'],'version':moved['version'],'destination':'notes.txt'}).status_code==200
+    assert client.get('/api/me').json()['storage']['used_bytes']==original_usage
+
+
+def test_move_directory_keeps_descendants_and_empty_hidden_folders(client,monkeypatch):
+    did=join(client)['default_id']
+    client.put(path(did,'upload'),params={'path':'source/.hidden/note.txt','create_directories':True},content=b'keep')
+    client.post(path(did,'folders'),json={'path':'source/empty','parents':True})
+    client.post(path(did,'folders'),json={'path':'target'})
+    monkeypatch.setattr(main,'STORAGE_LIMIT',1)
+    item=next(i for i in entries(client,did) if i['name']=='source')
+    assert client.post(path(did,'rename'),json={'path':item['path'],'version':item['version'],'destination':'target/source'}).status_code==200
+    assert client.get(path(did,'download'),params={'path':'target/source/.hidden/note.txt'}).content==b'keep'
+    assert entries(client,did,'target/source/empty')==[]
+    assert client.get(path(did,'files'),params={'path':'source'}).status_code==404
+
+
+def test_move_rejects_cycles_conflicts_stale_versions_and_cross_root_paths(client):
+    did=join(client)['default_id']
+    upload(client,did,'source.txt',b'source')
+    client.post(path(did,'folders'),json={'path':'target'})
+    upload(client,did,'target/source.txt',b'original')
+    item=next(i for i in entries(client,did) if i['name']=='source.txt')
+    for destination in ('target/source.txt','missing/source.txt','../public/source.txt','/public/source.txt'):
+        r=client.post(path(did,'rename'),json={'path':item['path'],'version':item['version'],'destination':destination})
+        assert r.status_code in (400,404,409)
+    assert client.post(path(did,'rename'),json={'path':item['path'],'version':'stale','destination':'target/new.txt'}).status_code==409
+    assert client.get(path(did,'download'),params={'path':'target/source.txt'}).content==b'original'
+    folder=next(i for i in entries(client,did) if i['name']=='target')
+    assert client.post(path(did,'rename'),json={'path':folder['path'],'version':folder['version'],'destination':'target/inside'}).status_code==409
+
+
+def test_move_rollback_restores_original_tree(client,monkeypatch):
+    did=join(client)['default_id']
+    client.put(path(did,'upload'),params={'path':'source/sub/note.txt','create_directories':True},content=b'keep')
+    client.post(path(did,'folders'),json={'path':'target'})
+    item=next(i for i in entries(client,did) if i['name']=='source')
+    def fail(*args):raise RuntimeError('move commit failed')
+    monkeypatch.setattr(main,'log',fail)
+    with pytest.raises(RuntimeError,match='move commit failed'):
+        client.post(path(did,'rename'),json={'path':item['path'],'version':item['version'],'destination':'target/source'})
+    assert client.get(path(did,'download'),params={'path':'source/sub/note.txt'}).content==b'keep'
+    assert entries(client,did,'target')==[]
