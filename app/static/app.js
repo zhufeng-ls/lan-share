@@ -217,8 +217,8 @@ async function render() {
 function heading(title,description,eyebrow,actions) { $('#page-title').textContent=title;$('#page-description').textContent=description;$('#page-eyebrow').textContent=eyebrow;$('#page-actions').innerHTML=actions;$('#top-label').textContent=state.view==='files'?'文件空间':title; }
 async function renderFiles(requestId) {
   const dir=state.dirs.find(d=>d.id===state.did);if(!dir)throw Error('这个目录不存在，请从全部目录中选择');
-  heading(dir.name,`${dir.owner?`${dir.owner} 创建`:'大家共有'} · 你和其他人都可以上传、修改和分享`,'SHARED FILES',button('share-dir','分享目录','secondary','link')+button('new-folder','新建文件夹','secondary','plus')+button('upload-folder-button','上传文件夹','secondary','folder')+button('upload-button','上传文件','primary','upload'));
-  $('#share-dir').onclick=safe(()=>share(state.path));$('#new-folder').onclick=safe(createFolder);$('#upload-button').onclick=()=>$('#file-input').click();$('#upload-folder-button').onclick=()=>{if(!('webkitdirectory' in $('#folder-input'))){toast('此浏览器不支持文件夹选择，请使用新版 Chrome、Edge 或 Firefox');return;}$('#folder-input').click();};
+  heading(dir.name,`${dir.owner?`${dir.owner} 创建`:'大家共有'} · 你和其他人都可以上传、修改和分享`,'SHARED FILES',button('share-dir','分享目录','secondary','link')+button('new-file','新建临时文件','secondary','file')+button('new-folder','新建文件夹','secondary','plus')+button('upload-folder-button','上传文件夹','secondary','folder')+button('upload-button','上传文件','primary','upload'));
+  $('#share-dir').onclick=safe(()=>share(state.path));$('#new-folder').onclick=safe(createFolder);$('#new-file').onclick=safe(createTemporaryFile);$('#upload-button').onclick=()=>$('#file-input').click();$('#upload-folder-button').onclick=()=>{if(!('webkitdirectory' in $('#folder-input'))){toast('此浏览器不支持文件夹选择，请使用新版 Chrome、Edge 或 Firefox');return;}$('#folder-input').click();};
   const parts=state.path?state.path.split('/'):[];
   $('#context-bar').innerHTML=`<div class="toolbar"><div class="breadcrumbs"><button data-path="">${icon('folder')} ${esc(dir.name)}</button>${parts.map((part,index)=>`<span>/</span><button data-path="${esc(parts.slice(0,index+1).join('/'))}">${esc(part)}</button>`).join('')}</div><div class="actions"><label class="search-box" aria-label="搜索当前文件夹"><span>${icon('search')}</span><input id="file-search" placeholder="搜索当前文件夹" type="search"></label><button id="refresh-files" class="text-button" title="刷新文件列表" aria-label="刷新文件列表">${icon('refresh')}</button></div></div>`;
   $$('.breadcrumbs button').forEach(b=>b.onclick=safe(()=>navigate('files',state.did,b.dataset.path)));
@@ -239,6 +239,22 @@ async function copyFile(item) {
   const result=await api(endpoint('copy',sourceId),{method:'POST',json:{path:item.path,version:item.version}});
   toast(`已复制到「${result.directory_name}」：${result.path}`);
   if(state.view==='files'&&state.did===result.directory_id&&!state.path)await render();
+}
+async function createTemporaryFile() {
+  const did=state.did,folder=state.path;
+  let initial='临时文件.txt',number=2;
+  while(state.items.some(item=>item.name===initial))initial=`临时文件 ${number++}.txt`;
+  const created=await dialog({title:'新建临时文件',wide:true,submit:'创建文件',html:`<p>保存到当前目录，所有成员可读写。内容可以留空，文件不会自动删除。</p><label for="new-file-name">文件名</label><input id="new-file-name" required maxlength="100" value="${esc(initial)}"><label for="editor-content">文本内容（可留空）</label><textarea id="editor-content" spellcheck="false" placeholder="临时记录、待办事项或一段代码…"></textarea>`,onSubmit:async()=>{
+    const name=$('#new-file-name').value.trim(),content=$('#editor-content').value;
+    if(!leafName(name))throw Error('文件名不能为空，不能包含斜杠，或使用 . 和 ..');
+    if(!isText(name))throw Error('请使用文本文件扩展名，例如 .txt、.md 或 .json');
+    if(new TextEncoder().encode(content).length>2*1024*1024)throw Error('文本内容不能超过 2 MiB');
+    const path=folder?`${folder}/${name}`:name;
+    try{await api(`${endpoint('upload',did)}?${new URLSearchParams({path,expected_version:''})}`,{method:'PUT',body:content,headers:{'Content-Type':'application/octet-stream'}});}
+    catch(error){if(error.status===409)throw Error('已有同名文件或文件夹，请更换文件名；你的内容已保留');throw error;}
+    return name;
+  }});
+  if(created){state.search='';await render();toast(`已创建「${created}」`);}
 }
 async function createFolder() {const name=await ask('新建文件夹','将在当前目录中创建，所有人都能访问。','','创建',leafName);if(name){await api(endpoint('folders'),{method:'POST',json:{path:joinPath(name)}});await render();toast('文件夹已创建');}}
 async function renameFile(item) {const name=await ask('重命名',`为「${item.name}」设置新名称。旧的分享链接可能因此失效。`,item.name,'保存',leafName);if(name&&name!==item.name){await api(endpoint('rename'),{method:'POST',json:{path:item.path,version:item.version,destination:joinPath(name)}});await render();toast('名称已更新');}}
