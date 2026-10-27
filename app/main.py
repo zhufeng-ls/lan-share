@@ -8,6 +8,7 @@ import sqlite3
 import time
 import unicodedata
 import uuid
+import zipfile
 from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 
@@ -15,6 +16,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.background import BackgroundTask
 
 from .admin_security import password_matches
 
@@ -106,6 +108,8 @@ def initialize():
     for item in (DATA / "temporary").iterdir():
         if item.is_file():
             item.unlink()
+        elif item.is_dir() and not item.is_symlink():
+            shutil.rmtree(item)
 
 
 @asynccontextmanager
@@ -491,13 +495,65 @@ async def folder(did: str, body: FolderBody, request: Request):
     return {"ok": True, "created": True}
 
 
+def snapshot_directory(source, snapshot):
+    snapshot.mkdir()
+    for parent, folders, files in os.walk(source, followlinks=False):
+        destination = snapshot / Path(parent).relative_to(source)
+        for name in folders:
+            if (Path(parent) / name).is_symlink():
+                raise HTTPException(400, "目录含有不支持的符号链接")
+            (destination / name).mkdir()
+        for name in files:
+            entry = Path(parent) / name
+            if entry.is_symlink() or not entry.is_file():
+                raise HTTPException(400, "目录含有不支持的文件类型")
+            os.link(entry, destination / name)
+
+
+def archive_directory(snapshot, output, name):
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=1, strict_timestamps=False) as archive:
+        archive.write(snapshot, name + "/")
+        for parent, folders, files in os.walk(snapshot):
+            relative_parent = Path(parent).relative_to(snapshot)
+            for child in folders + files:
+                archive.write(Path(parent) / child, str(Path(name) / relative_parent / child))
+
+
+async def finish_io(function, *args):
+    task = asyncio.create_task(asyncio.to_thread(function, *args))
+    try:
+        return await asyncio.shield(task)
+    except asyncio.CancelledError:
+        await task
+        raise
+
+
 @app.get("/api/directories/{did}/download")
-def download(did: str, request: Request, path: str):
+async def download(did: str, request: Request, path: str):
     current_user(request)
-    target = locate(did, relative(path, False))
-    if not target.is_file():
-        raise HTTPException(400, "请选择文件下载")
-    return FileResponse(target, filename=target.name, media_type="application/octet-stream")
+    stage = None
+    try:
+        async with mutation_lock:
+            current_user(request)
+            target = locate(did, relative(path, False))
+            if target.is_file():
+                return FileResponse(target, filename=target.name, media_type="application/octet-stream")
+            if not target.is_dir():
+                raise HTTPException(400, "请选择文件或文件夹下载")
+            stage = DATA / "temporary" / uuid.uuid4().hex
+            stage.mkdir()
+            snapshot = stage / "snapshot"
+            await finish_io(snapshot_directory, target, snapshot)
+        output = stage / "download.zip"
+        await finish_io(archive_directory, snapshot, output, target.name)
+        current_user(request)
+        locate(did)
+        return FileResponse(output, filename=target.name + ".zip", media_type="application/zip",
+                            background=BackgroundTask(shutil.rmtree, stage, ignore_errors=True))
+    except BaseException:
+        if stage:
+            shutil.rmtree(stage, ignore_errors=True)
+        raise
 
 
 @app.put("/api/directories/{did}/upload")

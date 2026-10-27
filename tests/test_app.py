@@ -791,3 +791,25 @@ def test_move_rollback_restores_original_tree(client,monkeypatch):
         client.post(path(did,'rename'),json={'path':item['path'],'version':item['version'],'destination':'target/source'})
     assert client.get(path(did,'download'),params={'path':'source/sub/note.txt'}).content==b'keep'
     assert entries(client,did,'target')==[]
+
+
+def test_folder_download_zip_includes_hidden_and_empty_content(client):
+    import io, zipfile
+    did=join(client)['default_id']
+    client.put(path(did,'upload'),params={'path':'资料/.hidden/data.txt','create_directories':True},content=b'content')
+    client.post(path(did,'folders'),json={'path':'资料/empty','parents':True})
+    result=client.get(path(did,'download'),params={'path':'资料'})
+    assert result.status_code==200
+    assert result.headers['content-type']=='application/zip'
+    with zipfile.ZipFile(io.BytesIO(result.content)) as archive:
+        assert archive.read('资料/.hidden/data.txt')==b'content'
+        assert '资料/empty/' in archive.namelist()
+    assert not list((main.DATA/'temporary').iterdir())
+
+
+def test_folder_download_rejects_nested_symlink(client,tmp_path):
+    did=join(client)['default_id']
+    client.post(path(did,'folders'),json={'path':'folder'})
+    (main.DATA/'files'/did/'folder'/'escape').symlink_to(tmp_path,target_is_directory=True)
+    assert client.get(path(did,'download'),params={'path':'folder'}).status_code==400
+    assert not list((main.DATA/'temporary').iterdir())

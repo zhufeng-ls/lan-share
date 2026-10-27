@@ -5,7 +5,6 @@ const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const shapes = {
   folder:'<path d="M3 7V5a2 2 0 0 1 2-2h5l3 4h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/>',
-  move:'<path d="M3 7V5a2 2 0 0 1 2-2h5l3 4h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/><path d="M7 14h10m-3-3 3 3-3 3"/>',
   copy:'<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
   file:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h5"/>',
   home:'<path d="m3 10 9-7 9 7v10H3Z"/><path d="M9 20v-7h6v7"/>',
@@ -230,9 +229,21 @@ async function renderFiles(requestId) {
 function fileRows() {
   const items=state.items.filter(i=>i.name.toLocaleLowerCase().includes(state.search.toLocaleLowerCase()));
   let banner='';if(state.file){const item=state.items.find(i=>i.path===state.file&&!i.is_dir);banner=item?`<div class="share-banner"><p>有人与你分享了 <strong>${esc(item.name)}</strong></p><a href="${endpoint('download')}?${new URLSearchParams({path:item.path})}">下载文件 ↓</a></div>`:'<div class="share-banner"><p>分享的文件已被移动或删除，下面显示当前目录。</p></div>';}
-  $('#content').innerHTML=banner+(items.length?`<div class="table-wrap"><table class="file-table"><thead><tr><th>文件名称</th><th>大小</th><th>修改时间</th><th>操作</th></tr></thead><tbody>${items.map((item,index)=>`<tr data-index="${index}"><td><button class="file-name" data-action="open" title="${esc(item.name)}">${symbol(item)}<span class="filename">${esc(item.name)}</span></button></td><td>${item.is_dir?'—':size(item.size)}</td><td>${date(item.modified)}</td><td><div class="row-actions">${!item.is_dir?`<a href="${endpoint('download')}?${new URLSearchParams({path:item.path})}" title="下载 ${esc(item.name)}" aria-label="下载 ${esc(item.name)}">${icon('download')}</a>`:''}${!item.is_dir&&isText(item.name)?`<button data-action="edit" title="编辑 ${esc(item.name)}" aria-label="编辑 ${esc(item.name)}">${icon('file')}</button>`:''}${!item.is_dir?`<button data-action="copy" title="复制到我的目录：${esc(item.name)}" aria-label="复制到我的目录 ${esc(item.name)}">${icon('copy')}</button>`:''}<button data-action="move" title="移动 ${esc(item.name)}" aria-label="移动 ${esc(item.name)}">${icon('move')}</button><button data-action="share" title="分享 ${esc(item.name)}" aria-label="分享 ${esc(item.name)}">${icon('link')}</button><button data-action="rename" title="重命名 ${esc(item.name)}" aria-label="重命名 ${esc(item.name)}">${icon('edit')}</button><button class="delete" data-action="delete" title="删除 ${esc(item.name)}" aria-label="删除 ${esc(item.name)}">${icon('trash')}</button></div></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty"><span class="empty-icon">${icon(state.search?'search':'folder')}</span><h3>${state.search?'没有找到匹配文件':'这里，等你放下第一份文件'}</h3><p>${state.search?'试试其他关键词。':'把文件拖到这里，或点击上传。放好之后，就能发给同一局域网里的伙伴。'}</p>${state.search?'':button('empty-upload','上传文件','primary','upload')}</div>`)+`<div class="hint-strip">${icon('shield')}删除的文件和覆盖前的版本，会保留在「回收与历史」中。</div>`;
+  const parentPath=state.path.split('/').slice(0,-1).join('/');
+  const moveOut=state.path?`<div class="move-out-bar"><button type="button" class="move-out-zone" data-drop-path="${esc(parentPath)}" data-navigate-up="${esc(parentPath)}"><span>↑ 上一级</span><small>拖到这里，移出当前文件夹</small></button>${parentPath?'<button type="button" class="move-out-zone move-out-root" data-drop-path="" data-navigate-up=""><span>⌂ 根目录</span><small>拖到这里，直接移回最外层</small></button>':''}</div>`:'';
+  $('#content').innerHTML=banner+moveOut+(items.length?`<div class="table-wrap"><table class="file-table"><thead><tr><th>文件名称</th><th>大小</th><th>修改时间</th><th>操作</th></tr></thead><tbody>${items.map((item,index)=>`<tr data-index="${index}" draggable="true" ${item.is_dir?`data-drop-path="${esc(item.path)}"`: ''}><td><button class="file-name" data-action="open" title="${esc(item.name)}">${symbol(item)}<span class="filename">${esc(item.name)}</span></button></td><td>${item.is_dir?'—':size(item.size)}</td><td>${date(item.modified)}</td><td><div class="row-actions"><a href="${endpoint('download')}?${new URLSearchParams({path:item.path})}" title="${item.is_dir?'下载文件夹 ZIP':'下载'} ${esc(item.name)}" aria-label="下载 ${esc(item.name)}">${icon('download')}</a><details class="row-menu"><summary aria-label="更多操作 ${esc(item.name)}" title="更多操作">⋯</summary><div class="row-menu-panel">${!item.is_dir&&isText(item.name)?`<button data-action="edit">编辑</button>`:''}${!item.is_dir?`<button data-action="copy">复制到我的目录</button>`:''}<button data-action="share">分享</button><button data-action="rename">重命名</button><button class="delete" data-action="delete">删除</button></div></details></div></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty"><span class="empty-icon">${icon(state.search?'search':'folder')}</span><h3>${state.search?'没有找到匹配文件':'这里，等你放下第一份文件'}</h3><p>${state.search?'试试其他关键词。':'把文件拖到这里，或点击上传。放好之后，就能发给同一局域网里的伙伴。'}</p>${state.search?'':button('empty-upload','上传文件','primary','upload')}</div>`)+`<div class="hint-strip">${icon('shield')}拖动文件或文件夹到目标文件夹、上方路径即可移动；删除及覆盖前的版本保留在「回收与历史」。</div>`;
+  $$('[data-navigate-up]').forEach(button=>button.onclick=safe(()=>navigate('files',state.did,button.dataset.navigateUp)));
+  $$('tr[data-index]',$('#content')).forEach(row=>{
+    row.ondragstart=e=>{
+      if(state.uploading||movingItem||e.target.closest('a,summary,details')){e.preventDefault();return;}
+      draggedItem={...items[Number(row.dataset.index)],did:state.did,parent:state.path};
+      e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('application/x-lan-share-move',draggedItem.path);row.classList.add('dragging-item');
+    };
+    row.ondragend=()=>{draggedItem=null;clearMoveHighlight();row.classList.remove('dragging-item');};
+  });
+  $$('.row-menu').forEach(menu=>menu.ontoggle=()=>{if(menu.open)$$('.row-menu').forEach(other=>{if(other!==menu)other.open=false;});});
   if($('#empty-upload'))$('#empty-upload').onclick=()=>$('#file-input').click();
-  $$('[data-action]',$('#content')).forEach(b=>b.onclick=safe(async()=>{const item=items[Number(b.closest('tr').dataset.index)];switch(b.dataset.action){case'open':if(item.is_dir)await navigate('files',state.did,item.path);else if(isText(item.name))await editFile(item);else window.location.href=`${endpoint('download')}?${new URLSearchParams({path:item.path})}`;break;case'edit':await editFile(item);break;case'copy':b.disabled=true;try{await copyFile(item);}finally{b.disabled=false;}break;case'move':await moveFile(item);break;case'share':await share(item.is_dir?item.path:state.path,item.is_dir?'':item.path);break;case'rename':await renameFile(item);break;case'delete':await deleteFile(item);break;}}));
+  $$('[data-action]',$('#content')).forEach(b=>b.onclick=safe(async()=>{const item=items[Number(b.closest('tr').dataset.index)];const menu=b.closest('details');if(menu)menu.open=false;switch(b.dataset.action){case'open':if(item.is_dir)await navigate('files',state.did,item.path);else if(isText(item.name))await editFile(item);else window.location.href=`${endpoint('download')}?${new URLSearchParams({path:item.path})}`;break;case'edit':await editFile(item);break;case'copy':b.disabled=true;try{await copyFile(item);}finally{b.disabled=false;}break;case'share':await share(item.is_dir?item.path:state.path,item.is_dir?'':item.path);break;case'rename':await renameFile(item);break;case'delete':await deleteFile(item);break;}}));
 }
 async function copyFile(item) {
   const sourceId=state.did;
@@ -258,38 +269,6 @@ async function createTemporaryFile() {
   if(created){state.search='';await render();toast(`已创建「${created}」`);}
 }
 async function createFolder() {const name=await ask('新建文件夹','将在当前目录中创建，所有人都能访问。','','创建',leafName);if(name){await api(endpoint('folders'),{method:'POST',json:{path:joinPath(name)}});await render();toast('文件夹已创建');}}
-async function moveFile(item) {
-  const did=state.did,sourceParent=state.path;
-  const rootName=state.dirs.find(dir=>dir.id===did)?.name||'根目录';
-  let selected='',ready=false,requestId=0,closed=false;
-  const destination=()=>selected?`${selected}/${item.name}`:item.name;
-  const pending=dialog({title:`移动 · ${item.name}`,submit:'移动到这里',html:`<p>选择「${esc(rootName)}」内的目标文件夹。移动后旧的分享链接可能失效。</p><div class="move-location"><button id="move-root" class="secondary" type="button">根目录</button><button id="move-up" class="secondary" type="button">上一级</button></div><p id="move-location" class="move-path"></p><div id="move-folders" class="move-folders" aria-live="polite"></div>`,onSubmit:async()=>{
-    if(!ready||selected===sourceParent)throw Error('请选择其他目标文件夹');
-    ready=false;$('#move-root').disabled=true;$('#move-up').disabled=true;$$('[data-move-folder]').forEach(button=>button.disabled=true);
-    try {await api(endpoint('rename',did),{method:'POST',json:{path:item.path,version:item.version,destination:destination()}});return selected?`${rootName}/${selected}`:rootName;}
-    catch(error){await load(selected);throw error;}
-  }});
-  async function load(path) {
-    const current=++requestId;ready=false;$('#modal-submit').disabled=true;
-    $('#move-folders').textContent='正在读取文件夹…';$('#modal-error').textContent='';
-    try {
-      const result=await api(`${endpoint('files',did)}?${new URLSearchParams({path})}`);
-      if(closed||current!==requestId)return;
-      selected=path;ready=true;
-      $('#move-location').textContent=`目标位置：${rootName}${path?'/'+path:'（根目录）'}`;
-      $('#move-root').disabled=!path;$('#move-up').disabled=!path;
-      const folders=result.items.filter(entry=>entry.is_dir&&(!item.is_dir||(entry.path!==item.path&&!entry.path.startsWith(item.path+'/'))));
-      $('#move-folders').innerHTML=folders.length?folders.map((entry,index)=>`<button type="button" class="move-folder" data-move-folder="${index}">${icon('folder')}<span>${esc(entry.name)}</span><span>进入 →</span></button>`).join(''):'<p class="muted">这里没有可进入的子文件夹。</p>';
-      $$('[data-move-folder]').forEach(button=>button.onclick=()=>load(folders[Number(button.dataset.moveFolder)].path));
-      $('#modal-submit').disabled=selected===sourceParent;
-    } catch(error){if(!closed&&current===requestId){$('#move-folders').textContent='无法读取目标文件夹';$('#modal-error').textContent=error.message;}}
-  }
-  $('#move-root').onclick=()=>load('');
-  $('#move-up').onclick=()=>load(selected.split('/').slice(0,-1).join('/'));
-  load(sourceParent);
-  const moved=await pending;closed=true;requestId++;
-  if(moved){await render();toast(`已移动到「${moved}」`);}
-}
 async function renameFile(item) {const name=await ask('重命名',`为「${item.name}」设置新名称。旧的分享链接可能因此失效。`,item.name,'保存',leafName);if(name&&name!==item.name){await api(endpoint('rename'),{method:'POST',json:{path:item.path,version:item.version,destination:joinPath(name)}});await render();toast('名称已更新');}}
 async function deleteFile(item) {if(await confirmAction('移入回收站',`「${item.name}」${item.is_dir?'及其中所有文件':''}将从共享目录中移除，大家都将无法在原位置访问。之后可从回收与历史中恢复。`,'移入回收站')){await api(endpoint('delete'),{method:'POST',json:{path:item.path,version:item.version}});await render();toast('已移入回收站');}}
 async function editFile(item) {
@@ -423,14 +402,36 @@ $('#file-input').onchange=safe(e=>uploadFiles(e.target.files));
 $('#folder-input').onchange=safe(e=>uploadFiles(e.target.files,true,e.target.webkitEntries||[]));
 $('#cancel-upload').onclick=()=>{uploadCancelled=true;currentUpload?.abort();};
 
-let dragDepth=0;const dropZone=$('main');
+let dragDepth=0,draggedItem=null,movingItem=false;const dropZone=$('main');
 const hasFiles=e=>Array.from(e.dataTransfer.types).includes('Files');
-dropZone.addEventListener('dragenter',e=>{if(state.view!=='files'||!hasFiles(e))return;e.preventDefault();dragDepth++;dropZone.classList.add('drop-active');});
-dropZone.addEventListener('dragover',e=>{if(state.view==='files'&&hasFiles(e))e.preventDefault();});
-dropZone.addEventListener('dragleave',()=>{dragDepth--;if(dragDepth<=0)dropZone.classList.remove('drop-active');});
+function clearMoveHighlight(){$$('.move-drop-target').forEach(el=>el.classList.remove('move-drop-target'));}
+function moveTarget(event){
+  const el=event.target.closest('[data-drop-path],.breadcrumbs [data-path]');
+  if(!el||!draggedItem||draggedItem.did!==state.did)return null;
+  const path=el.dataset.dropPath??el.dataset.path;
+  if(path===draggedItem.parent||(draggedItem.is_dir&&(path===draggedItem.path||path.startsWith(draggedItem.path+'/'))))return null;
+  return {el,path};
+}
+dropZone.addEventListener('dragenter',e=>{if(state.view!=='files'||draggedItem||!hasFiles(e))return;e.preventDefault();dragDepth++;dropZone.classList.add('drop-active');});
+dropZone.addEventListener('dragover',e=>{
+  if(state.view!=='files')return;
+  if(draggedItem){e.preventDefault();clearMoveHighlight();const target=moveTarget(e);e.dataTransfer.dropEffect=target?'move':'none';if(target)target.el.classList.add('move-drop-target');}
+  else if(hasFiles(e))e.preventDefault();
+});
+dropZone.addEventListener('dragleave',e=>{if(draggedItem){if(!dropZone.contains(e.relatedTarget))clearMoveHighlight();return;}dragDepth--;if(dragDepth<=0)dropZone.classList.remove('drop-active');});
 dropZone.addEventListener('drop',safe(async e=>{
   e.preventDefault();dragDepth=0;dropZone.classList.remove('drop-active');
   if(state.view!=='files')return;
+  if(draggedItem){
+    const source=draggedItem,target=moveTarget(e);draggedItem=null;clearMoveHighlight();
+    if(!target){toast('请拖到其他文件夹或上方路径，不能放入自身或子目录');return;}
+    const destination=target.path?`${target.path}/${source.name}`:source.name;
+    movingItem=true;
+    try{await api(endpoint('rename',source.did),{method:'POST',json:{path:source.path,version:source.version,destination}});await render();toast('已移动');}
+    finally{movingItem=false;}
+    return;
+  }
+  if(!hasFiles(e))return;
   const roots=captureDroppedItems(e.dataTransfer);
   await uploadSelection((check,onDirectory)=>collectDroppedItems(roots,check,onDirectory),true);
 }));
