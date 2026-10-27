@@ -231,11 +231,11 @@ function fileRows() {
   let banner='';if(state.file){const item=state.items.find(i=>i.path===state.file&&!i.is_dir);banner=item?`<div class="share-banner"><p>有人与你分享了 <strong>${esc(item.name)}</strong></p><a href="${endpoint('download')}?${new URLSearchParams({path:item.path})}">下载文件 ↓</a></div>`:'<div class="share-banner"><p>分享的文件已被移动或删除，下面显示当前目录。</p></div>';}
   const parentPath=state.path.split('/').slice(0,-1).join('/');
   const moveOut=state.path?`<div class="move-out-bar"><button type="button" class="move-out-zone" data-drop-path="${esc(parentPath)}" data-navigate-up="${esc(parentPath)}"><span>↑ 上一级</span><small>拖到这里，移出当前文件夹</small></button>${parentPath?'<button type="button" class="move-out-zone move-out-root" data-drop-path="" data-navigate-up=""><span>⌂ 根目录</span><small>拖到这里，直接移回最外层</small></button>':''}</div>`:'';
-  $('#content').innerHTML=banner+moveOut+(items.length?`<div class="table-wrap"><table class="file-table"><thead><tr><th>文件名称</th><th>大小</th><th>修改时间</th><th>操作</th></tr></thead><tbody>${items.map((item,index)=>`<tr data-index="${index}" draggable="true" ${item.is_dir?`data-drop-path="${esc(item.path)}"`: ''}><td><button class="file-name" data-action="open" title="${esc(item.name)}">${symbol(item)}<span class="filename">${esc(item.name)}</span></button></td><td>${item.is_dir?'—':size(item.size)}</td><td>${date(item.modified)}</td><td><div class="row-actions"><a href="${endpoint('download')}?${new URLSearchParams({path:item.path})}" title="${item.is_dir?'下载文件夹 ZIP':'下载'} ${esc(item.name)}" aria-label="下载 ${esc(item.name)}">${icon('download')}</a><details class="row-menu"><summary aria-label="更多操作 ${esc(item.name)}" title="更多操作">⋯</summary><div class="row-menu-panel">${!item.is_dir&&isText(item.name)?`<button data-action="edit">编辑</button>`:''}${!item.is_dir?`<button data-action="copy">复制到我的目录</button>`:''}<button data-action="share">分享</button><button data-action="rename">重命名</button><button class="delete" data-action="delete">删除</button></div></details></div></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty"><span class="empty-icon">${icon(state.search?'search':'folder')}</span><h3>${state.search?'没有找到匹配文件':'这里，等你放下第一份文件'}</h3><p>${state.search?'试试其他关键词。':'把文件拖到这里，或点击上传。放好之后，就能发给同一局域网里的伙伴。'}</p>${state.search?'':button('empty-upload','上传文件','primary','upload')}</div>`)+`<div class="hint-strip">${icon('shield')}拖动文件或文件夹到目标文件夹、上方路径即可移动；删除及覆盖前的版本保留在「回收与历史」。</div>`;
+  $('#content').innerHTML=banner+moveOut+(items.length?`<div class="table-wrap"><table class="file-table"><thead><tr><th>文件名称</th><th>大小</th><th>修改时间</th><th>操作</th></tr></thead><tbody>${items.map((item,index)=>`<tr data-index="${index}" draggable="true" ${item.is_dir?`data-drop-path="${esc(item.path)}"`: ''}><td><button class="file-name" draggable="true" data-action="open" title="${esc(item.name)}">${symbol(item)}<span class="filename">${esc(item.name)}</span></button></td><td>${item.is_dir?'—':size(item.size)}</td><td>${date(item.modified)}</td><td><div class="row-actions"><a href="${endpoint('download')}?${new URLSearchParams({path:item.path})}" title="${item.is_dir?'下载文件夹 ZIP':'下载'} ${esc(item.name)}" aria-label="下载 ${esc(item.name)}">${icon('download')}</a><details class="row-menu"><summary aria-label="更多操作 ${esc(item.name)}" title="更多操作">⋯</summary><div class="row-menu-panel">${!item.is_dir&&isText(item.name)?`<button data-action="edit">编辑</button>`:''}${!item.is_dir?`<button data-action="copy">复制到我的目录</button>`:''}<button data-action="share">分享</button><button data-action="rename">重命名</button><button class="delete" data-action="delete">删除</button></div></details></div></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty"><span class="empty-icon">${icon(state.search?'search':'folder')}</span><h3>${state.search?'没有找到匹配文件':'这里，等你放下第一份文件'}</h3><p>${state.search?'试试其他关键词。':'把文件拖到这里，或点击上传。放好之后，就能发给同一局域网里的伙伴。'}</p>${state.search?'':button('empty-upload','上传文件','primary','upload')}</div>`)+`<div class="hint-strip">${icon('shield')}拖动文件或文件夹到目标文件夹、上方路径即可移动；删除及覆盖前的版本保留在「回收与历史」。</div>`;
   $$('[data-navigate-up]').forEach(button=>button.onclick=safe(()=>navigate('files',state.did,button.dataset.navigateUp)));
   $$('tr[data-index]',$('#content')).forEach(row=>{
     row.ondragstart=e=>{
-      if(state.uploading||movingItem||e.target.closest('a,summary,details')){e.preventDefault();return;}
+      if(state.uploading||movingItem||e.target.closest?.('a,summary,details')){e.preventDefault();return;}
       draggedItem={...items[Number(row.dataset.index)],did:state.did,parent:state.path};
       e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('application/x-lan-share-move',draggedItem.path);row.classList.add('dragging-item');
     };
@@ -351,10 +351,10 @@ function uploadFiles(fileList,folderUpload=false,entries=[]) {
   const roots=[...entries].map(entry=>({entry}));
   return uploadSelection(roots.length?(check,onDirectory)=>collectDroppedItems(roots,check,onDirectory):async()=>({files:files.map(file=>({file,relativePath:folderUpload?file.webkitRelativePath:file.name})),directories:[]}),folderUpload);
 }
-async function uploadSelection(loadSelection,createDirectories=false) {
+async function uploadSelection(loadSelection,createDirectories=false,location=null) {
   if(state.uploading){toast('已有文件正在上传，请稍候');return;}
   if(state.view!=='files')return;
-  const did=state.did,basePath=state.path;
+  const did=location?.did??state.did,basePath=location?.path??state.path;
   state.uploading=true;uploadCancelled=false;let completed=0,created=0,skipped=0;
   const checkCancelled=()=>{if(uploadCancelled)throw Error('已取消上传');};
   const targetPath=path=>basePath?`${basePath}/${path}`:path;
@@ -391,7 +391,7 @@ async function uploadSelection(loadSelection,createDirectories=false) {
       $('#upload-label').textContent=`正在上传 ${index+1}/${plan.length} · ${relativePath}`;$('#upload-progress progress').value=0;
       await sendUpload(file,did,target,existing?.version,percent=>$('#upload-progress progress').value=percent,createDirectories);completed++;
     }
-    toast(`已上传 ${completed} 个文件${created?`，建立 ${created} 个文件夹`:''}${skipped?`，跳过 ${skipped} 个文件`:''}`);
+    toast(`已上传到「${basePath||'根目录'}」：${completed} 个文件${created?`，建立 ${created} 个文件夹`:''}${skipped?`，跳过 ${skipped} 个文件`:''}`);
   }catch(error){toast(`${error.message}；已完成 ${completed} 个文件、${created} 个文件夹，已完成项目保留`);}
   finally{
     state.uploading=false;currentUpload=null;$('#upload-progress').hidden=true;$('#file-input').value='';$('#folder-input').value='';
@@ -405,20 +405,25 @@ $('#cancel-upload').onclick=()=>{uploadCancelled=true;currentUpload?.abort();};
 let dragDepth=0,draggedItem=null,movingItem=false;const dropZone=$('main');
 const hasFiles=e=>Array.from(e.dataTransfer.types).includes('Files');
 function clearMoveHighlight(){$$('.move-drop-target').forEach(el=>el.classList.remove('move-drop-target'));}
+function dropLocation(event){
+  const selector='[data-drop-path],.breadcrumbs [data-path]';
+  const el=event.target.closest?.(selector)||document.elementFromPoint(event.clientX,event.clientY)?.closest(selector);
+  return el?{el,path:el.dataset.dropPath??el.dataset.path}:null;
+}
 function moveTarget(event){
-  const el=event.target.closest('[data-drop-path],.breadcrumbs [data-path]');
+  const location=dropLocation(event),el=location?.el;
   if(!el||!draggedItem||draggedItem.did!==state.did)return null;
   const path=el.dataset.dropPath??el.dataset.path;
   if(path===draggedItem.parent||(draggedItem.is_dir&&(path===draggedItem.path||path.startsWith(draggedItem.path+'/'))))return null;
   return {el,path};
 }
-dropZone.addEventListener('dragenter',e=>{if(state.view!=='files'||draggedItem||!hasFiles(e))return;e.preventDefault();dragDepth++;dropZone.classList.add('drop-active');});
+dropZone.addEventListener('dragenter',e=>{if(state.view!=='files')return;if(draggedItem){e.preventDefault();return;}if(!hasFiles(e))return;e.preventDefault();dragDepth++;dropZone.classList.add('drop-active');});
 dropZone.addEventListener('dragover',e=>{
   if(state.view!=='files')return;
   if(draggedItem){e.preventDefault();clearMoveHighlight();const target=moveTarget(e);e.dataTransfer.dropEffect=target?'move':'none';if(target)target.el.classList.add('move-drop-target');}
-  else if(hasFiles(e))e.preventDefault();
+  else if(hasFiles(e)){e.preventDefault();clearMoveHighlight();const target=dropLocation(e);if(target)target.el.classList.add('move-drop-target');e.dataTransfer.dropEffect='copy';}
 });
-dropZone.addEventListener('dragleave',e=>{if(draggedItem){if(!dropZone.contains(e.relatedTarget))clearMoveHighlight();return;}dragDepth--;if(dragDepth<=0)dropZone.classList.remove('drop-active');});
+dropZone.addEventListener('dragleave',e=>{if(draggedItem){if(!dropZone.contains(e.relatedTarget))clearMoveHighlight();return;}dragDepth--;if(dragDepth<=0){dropZone.classList.remove('drop-active');clearMoveHighlight();}});
 dropZone.addEventListener('drop',safe(async e=>{
   e.preventDefault();dragDepth=0;dropZone.classList.remove('drop-active');
   if(state.view!=='files')return;
@@ -427,13 +432,15 @@ dropZone.addEventListener('drop',safe(async e=>{
     if(!target){toast('请拖到其他文件夹或上方路径，不能放入自身或子目录');return;}
     const destination=target.path?`${target.path}/${source.name}`:source.name;
     movingItem=true;
-    try{await api(endpoint('rename',source.did),{method:'POST',json:{path:source.path,version:source.version,destination}});await render();toast('已移动');}
+    try{await api(endpoint('rename',source.did),{method:'POST',json:{path:source.path,version:source.version,destination}});await render();toast(`已移动到「${target.path||'根目录'}」`);}
     finally{movingItem=false;}
     return;
   }
   if(!hasFiles(e))return;
+  const target=dropLocation(e),location={did:state.did,path:target?.path??state.path};
+  clearMoveHighlight();
   const roots=captureDroppedItems(e.dataTransfer);
-  await uploadSelection((check,onDirectory)=>collectDroppedItems(roots,check,onDirectory),true);
+  await uploadSelection((check,onDirectory)=>collectDroppedItems(roots,check,onDirectory),true,location);
 }));
 window.addEventListener('beforeunload',e=>{if(state.uploading){e.preventDefault();e.returnValue='';}});
 start().catch(error=>{if(error.status===401){$('#welcome').hidden=false;$('#join-name').focus();}else{$('#welcome').hidden=false;$('#join-error').textContent=`无法连接服务：${error.message}`;}});
